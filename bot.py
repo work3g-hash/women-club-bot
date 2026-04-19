@@ -1,7 +1,4 @@
 import logging
-import json
-import os
-import tempfile
 from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
@@ -12,6 +9,7 @@ from telegram.ext import (
     MessageHandler,
     CallbackQueryHandler,
     ConversationHandler,
+    ChatMemberHandler,
     filters,
     ContextTypes,
 )
@@ -23,6 +21,9 @@ BOT_TOKEN = "8762973970:AAHVP0OLco-jDU8a-q6WqfEb15WRMHxQYyw"
 ADMIN_ID = 691846456
 GROUP_LINK = "https://t.me/+tLpqhb4CvOYyMjk6"
 SHEET_ID = "1DfHKP3uXaEy4ZaKZRAeghPGlvLX7BWwnl6cVg7gyKPc"
+
+# ID группы — заполним после того как добавим бота в группу
+GROUP_ID = None  # например: -1001234567890
 
 GOOGLE_CREDS = {
     "type": "service_account",
@@ -69,14 +70,16 @@ GOOGLE_CREDS = {
 
 NAME, CITY, WORK, VALUE, WHY, RULES = range(6)
 
-RULES_TEXT = """📋 Правила нашего клуба:
+RULES_TEXT = """Прежде чем продолжить, познакомься с правилами нашего клуба 🤍
 
-1. Уважительное общение со всеми участницами
-2. Оскорбления и конфликты — недопустимы
+1. Уважительное общение — это основа всего
+2. Оскорбления и конфликты недопустимы
 3. Никакой агрессивной рекламы
 4. Делимся только проверенными рекомендациями
-5. Всё, что обсуждается в клубе — остаётся внутри
-6. Наша цель — поддержка и польза друг другу"""
+5. Всё, что происходит в клубе — остаётся внутри
+6. Мы здесь для того, чтобы быть полезными друг другу
+
+Клуб создан для женщин, которые хотят давать и получать — поддержку, контакты, опыт и тёплое общение."""
 
 
 def get_sheet():
@@ -120,52 +123,81 @@ def update_status(user_id: int, status: str):
         logger.error(f"Ошибка обновления статуса: {e}")
 
 
+def format_card(data: dict, username: str) -> str:
+    return (
+        f"👋 Новая участница!\n\n"
+        f"👤 Имя: {data.get('name', '')}\n"
+        f"📍 Город: {data.get('city', '')}\n"
+        f"💼 Занятие: {data.get('work', '')}\n"
+        f"🤝 Чем могу быть полезна: {data.get('value', '')}\n"
+        f"💛 Почему хочу в клуб: {data.get('why', '')}\n"
+        f"📱 Username: {'@' + username if username else 'нет'}"
+    )
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await update.message.reply_text(
-        "Привет! 👋\n\n"
-        "Я помогу тебе подать заявку в закрытый Женский клуб Дюссельдорфа 🌸\n\n"
-        "Это русскоязычное сообщество, где женщины помогают друг другу, "
-        "находят хороших мастеров и просто общаются.\n\n"
-        "Анкета займёт 2 минуты ⏱\n\n"
-        "Как тебя зовут? 😊"
+        "Привет! 🌸\n\n"
+        "Ты сделала первый шаг к вступлению в Девочки Рулят — "
+        "закрытый клуб для украинок и русскоязычных женщин в Германии.\n\n"
+        "Здесь собираются интересные, активные и открытые женщины, "
+        "которые хотят находить своих людей, делиться опытом "
+        "и быть полезными друг другу.\n\n"
+        "Вход в клуб по анкете — это займёт около 2 минут.\n\n"
+        "Начнём? Как тебя зовут? 😊"
     )
     return NAME
 
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["name"] = update.message.text
-    await update.message.reply_text("В каком городе Германии ты живёшь? 📍")
+    await update.message.reply_text(
+        f"Очень приятно, {update.message.text}! 🤍\n\n"
+        "В каком городе Германии ты живёшь или работаешь? 📍"
+    )
     return CITY
 
 
 async def get_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["city"] = update.message.text
-    await update.message.reply_text("Чем ты занимаешься? (работа / бизнес / в поиске) 💼")
+    await update.message.reply_text(
+        "Чем ты занимаешься? Расскажи немного о себе — "
+        "работа, бизнес, профессия или, может быть, сейчас в поиске. 💼"
+    )
     return WORK
 
 
 async def get_work(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["work"] = update.message.text
-    await update.message.reply_text("Чем ты можешь быть полезна участницам клуба? 🤝")
+    await update.message.reply_text(
+        "Это важный вопрос, который мы задаём всем 🤝\n\n"
+        "Чем ты можешь быть полезна участницам клуба?\n\n"
+        "Может быть, у тебя есть опыт, знания, контакты или просто "
+        "желание поддерживать других — всё это ценно."
+    )
     return VALUE
 
 
 async def get_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["value"] = update.message.text
-    await update.message.reply_text("Почему тебе интересно быть в этом клубе? 💛")
+    await update.message.reply_text(
+        "И последний вопрос перед правилами 💛\n\n"
+        "Почему тебе интересно быть в этом клубе?\n\n"
+        "Что ты хочешь найти здесь — для себя?"
+    )
     return WHY
 
 
 async def get_why(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["why"] = update.message.text
     keyboard = [[
-        InlineKeyboardButton("✅ Да, согласна", callback_data="rules_yes"),
+        InlineKeyboardButton("✅ Да, принимаю", callback_data="rules_yes"),
         InlineKeyboardButton("❌ Нет", callback_data="rules_no"),
     ]]
     await update.message.reply_text(RULES_TEXT)
     await update.message.reply_text(
-        "Ты согласна соблюдать эти правила? 🤝",
+        "Ты согласна соблюдать эти правила и быть частью нашего клуба? 🤍",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
     return RULES
@@ -178,8 +210,9 @@ async def get_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "rules_no":
         await query.edit_message_text(
             "Спасибо за честность 🙏\n\n"
-            "Без согласия с правилами мы не сможем принять заявку.\n"
-            "Если передумаешь — просто напиши /start 💛"
+            "Без согласия с правилами мы не сможем принять заявку — "
+            "это важно для атмосферы клуба.\n\n"
+            "Если передумаешь — просто напиши /start, мы всегда рады 💛"
         )
         return ConversationHandler.END
 
@@ -193,8 +226,14 @@ async def get_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Ошибка записи в таблицу: {e}")
 
-    card = (
-        f"🔔 Новая заявка в клуб!\n\n"
+    # Сохраняем данные для публикации визитки после вступления
+    context.bot_data[f"card_{user.id}"] = {
+        "data": d.copy(),
+        "username": username
+    }
+
+    admin_card = (
+        f"🔔 Новая заявка в Девочки Рулят!\n\n"
         f"👤 Имя: {d.get('name', '')}\n"
         f"📍 Город: {d.get('city', '')}\n"
         f"💼 Занятие: {d.get('work', '')}\n"
@@ -209,13 +248,14 @@ async def get_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]]
     await context.bot.send_message(
         chat_id=ADMIN_ID,
-        text=card,
+        text=admin_card,
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
     await query.edit_message_text(
-        "Спасибо! 🙏\n\n"
-        "Твоя заявка отправлена на рассмотрение.\n\n"
-        "Мы рассмотрим её в течение 24-48 часов и ответим тебе здесь 💛"
+        "Твоя заявка отправлена! 🌸\n\n"
+        "Мы внимательно её рассмотрим и ответим тебе здесь в течение 24-48 часов.\n\n"
+        "Если тебя одобрят — твоя анкета будет опубликована в группе, "
+        "чтобы участницы могли познакомиться с тобой 💛"
     )
     return ConversationHandler.END
 
@@ -235,20 +275,34 @@ async def handle_admin_decision(update: Update, context: ContextTypes.DEFAULT_TY
         await context.bot.send_message(
             chat_id=applicant_id,
             text=(
-                "🎉 Поздравляем! Твоя заявка одобрена!\n\n"
-                "Добро пожаловать в Женский клуб Дюссельдорфа 🌸\n\n"
-                f"Вот ссылка для вступления:\n{GROUP_LINK}"
+                "Добро пожаловать в Девочки Рулят! 🎉🌸\n\n"
+                "Твоя заявка одобрена — мы рады, что ты с нами!\n\n"
+                f"Вот ссылка для вступления в наш клуб:\n{GROUP_LINK}\n\n"
+                "Когда зайдёшь — твоя анкета будет опубликована в группе, "
+                "чтобы все смогли познакомиться с тобой.\n\n"
+                "Увидимся внутри! 💛"
             )
         )
+
+        # Публикуем визитку в группе если GROUP_ID задан
+        if GROUP_ID:
+            saved = context.bot_data.get(f"card_{applicant_id}")
+            if saved:
+                card_text = format_card(saved["data"], saved["username"])
+                try:
+                    await context.bot.send_message(chat_id=GROUP_ID, text=card_text)
+                except Exception as e:
+                    logger.error(f"Ошибка публикации в группу: {e}")
+
         await query.edit_message_text(query.message.text + "\n\n✅ Одобрено — ссылка отправлена")
     else:
         update_status(applicant_id, "❌ Отклонена")
         await context.bot.send_message(
             chat_id=applicant_id,
             text=(
-                "Спасибо за интерес к нашему клубу 🙏\n\n"
+                "Спасибо, что заинтересовалась нашим клубом 🙏\n\n"
                 "К сожалению, сейчас мы не можем принять твою заявку.\n\n"
-                "Следи за нашим Instagram 💛"
+                "Следи за нашим Instagram — возможно, мы снова откроем приём 💛"
             )
         )
         await query.edit_message_text(query.message.text + "\n\n❌ Отклонено")
@@ -256,7 +310,10 @@ async def handle_admin_decision(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-    await update.message.reply_text("Анкета сброшена. Напиши /start чтобы начать заново 💛")
+    await update.message.reply_text(
+        "Анкета сброшена 🌸\n\n"
+        "Если захочешь вступить — просто напиши /start, мы всегда рады!"
+    )
     return ConversationHandler.END
 
 
