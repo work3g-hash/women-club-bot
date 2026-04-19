@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+import pytz
 import gspread
 from google.oauth2.service_account import Credentials
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -98,7 +99,7 @@ def get_sheet():
 def add_to_sheet(data: dict, username: str, user_id: int):
     sheet = get_sheet()
     row = [
-        datetime.now().strftime("%d.%m.%Y %H:%M"),
+        datetime.now(pytz.timezone("Europe/Berlin")).strftime("%d.%m.%Y %H:%M"),
         data.get("name", ""),
         data.get("city", ""),
         data.get("work", ""),
