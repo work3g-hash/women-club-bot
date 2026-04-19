@@ -25,20 +25,19 @@ RULES_TEXT = """📋 Правила нашего клуба:
 2. Оскорбления и конфликты — недопустимы
 3. Никакой агрессивной рекламы
 4. Делимся только проверенными рекомендациями
-5. Всё, что обсуждается в клубе — остаётся внутри 🤫
-6. Наша цель — поддержка и польза друг другу 💛"""
+5. Всё, что обсуждается в клубе — остаётся внутри
+6. Наша цель — поддержка и польза друг другу"""
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await update.message.reply_text(
         "Привет! 👋\n\n"
-        "Я помогу тебе подать заявку в закрытый *Женский клуб Дюссельдорфа* 🌸\n\n"
+        "Я помогу тебе подать заявку в закрытый Женский клуб Дюссельдорфа 🌸\n\n"
         "Это русскоязычное сообщество, где женщины помогают друг другу, "
         "находят хороших мастеров и просто общаются.\n\n"
         "Анкета займёт 2 минуты ⏱\n\n"
-        "Как тебя зовут? 😊",
-        parse_mode="Markdown"
+        "Как тебя зовут? 😊"
     )
     return NAME
 
@@ -95,15 +94,16 @@ async def get_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = query.from_user
     d = context.user_data
+    username = user.username if user.username else "нет"
     card = (
-        f"🔔 *Новая заявка в клуб!*\n\n"
-        f"👤 Имя: {d.get('name')}\n"
-        f"📍 Город: {d.get('city')}\n"
-        f"💼 Занятие: {d.get('work')}\n"
-        f"🤝 Польза: {d.get('value')}\n"
-        f"💛 Почему: {d.get('why')}\n\n"
-        f"🆔 User ID: `{user.id}`\n"
-        f"📱 Username: @{user.username or '—'}"
+        f"🔔 Новая заявка в клуб!\n\n"
+        f"👤 Имя: {d.get('name', '—')}\n"
+        f"📍 Город: {d.get('city', '—')}\n"
+        f"💼 Занятие: {d.get('work', '—')}\n"
+        f"🤝 Польза: {d.get('value', '—')}\n"
+        f"💛 Почему: {d.get('why', '—')}\n\n"
+        f"ID: {user.id}\n"
+        f"Username: {username}"
     )
     keyboard = [[
         InlineKeyboardButton("✅ Одобрить", callback_data=f"approve_{user.id}"),
@@ -112,13 +112,12 @@ async def get_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=ADMIN_ID,
         text=card,
-        parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
     await query.edit_message_text(
         "Спасибо! 🙏\n\n"
         "Твоя заявка отправлена на рассмотрение.\n\n"
-        "Мы рассмотрим её в течение 24–48 часов и ответим тебе здесь 💛"
+        "Мы рассмотрим её в течение 24-48 часов и ответим тебе здесь 💛"
     )
     return ConversationHandler.END
 
@@ -138,15 +137,11 @@ async def handle_admin_decision(update: Update, context: ContextTypes.DEFAULT_TY
             chat_id=applicant_id,
             text=(
                 "🎉 Поздравляем! Твоя заявка одобрена!\n\n"
-                "Добро пожаловать в *Женский клуб Дюссельдорфа* 🌸\n\n"
+                "Добро пожаловать в Женский клуб Дюссельдорфа 🌸\n\n"
                 f"Вот ссылка для вступления:\n{GROUP_LINK}"
-            ),
-            parse_mode="Markdown"
+            )
         )
-        await query.edit_message_text(
-            query.message.text + "\n\n✅ *Одобрено* — ссылка отправлена",
-            parse_mode="Markdown"
-        )
+        await query.edit_message_text(query.message.text + "\n\n✅ Одобрено — ссылка отправлена")
     else:
         await context.bot.send_message(
             chat_id=applicant_id,
@@ -156,17 +151,12 @@ async def handle_admin_decision(update: Update, context: ContextTypes.DEFAULT_TY
                 "Следи за нашим Instagram 💛"
             )
         )
-        await query.edit_message_text(
-            query.message.text + "\n\n❌ *Отклонено*",
-            parse_mode="Markdown"
-        )
+        await query.edit_message_text(query.message.text + "\n\n❌ Отклонено")
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-    await update.message.reply_text(
-        "Анкета сброшена. Напиши /start чтобы начать заново 💛"
-    )
+    await update.message.reply_text("Анкета сброшена. Напиши /start чтобы начать заново 💛")
     return ConversationHandler.END
 
 
