@@ -67,7 +67,7 @@ GOOGLE_CREDS = {
     "universe_domain": "googleapis.com"
 }
 
-NAME, CITY, WORK, VALUE, WHY, RULES = range(6)
+NAME, CITY, WORK, VALUE, WHY, INSTAGRAM, RULES = range(7)
 
 RULES_TEXT = (
     "Прежде чем продолжить, познакомься с правилами нашего клуба\n\n"
@@ -89,7 +89,7 @@ def get_sheet():
     sheet = client.open_by_key(SHEET_ID).sheet1
     if not sheet.get_all_values():
         sheet.insert_row(
-            ["Дата", "Имя", "Город", "Занятие", "Польза", "Почему", "Username", "Telegram ID", "Статус"],
+            ["Дата", "Имя", "Город", "Занятие", "Польза", "Почему", "Instagram", "Username", "Telegram ID", "Статус"],
             index=1
         )
     return sheet
@@ -107,6 +107,7 @@ def add_to_sheet(data, username, user_id):
         data.get("why", ""),
         "@" + username if username else "нет",
         str(user_id),
+        data.get("instagram", ""),
         "На рассмотрении"
     ]
     sheet.append_row(row)
@@ -118,7 +119,7 @@ def update_status(user_id, status):
         rows = sheet.get_all_values()
         for i, row in enumerate(rows):
             if len(row) >= 8 and row[7] == str(user_id):
-                sheet.update_cell(i + 1, 9, status)
+                sheet.update_cell(i + 1, 10, status)
                 break
     except Exception as e:
         logger.error("Ошибка обновления статуса: %s", e)
@@ -180,6 +181,16 @@ async def get_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def get_why(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["why"] = update.message.text
+    await update.message.reply_text(
+        "И последнее — есть ли у тебя Instagram?\n\n"
+        "Поделись ссылкой на профиль, если хочешь.\n"
+        "Если нет — просто напиши нет."
+    )
+    return INSTAGRAM
+
+
+async def get_instagram(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["instagram"] = update.message.text
     keyboard = [[
         InlineKeyboardButton("Да, принимаю", callback_data="rules_yes"),
         InlineKeyboardButton("Нет", callback_data="rules_no"),
@@ -221,7 +232,8 @@ async def get_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Город: " + d.get("city", "") + "\n"
         "Занятие: " + d.get("work", "") + "\n"
         "Польза: " + d.get("value", "") + "\n"
-        "Почему: " + d.get("why", "") + "\n\n"
+        "Почему: " + d.get("why", "") + "\n"
+        "Instagram: " + d.get("instagram", "") + "\n\n"
         "ID: " + str(user.id) + "\n"
         "Username: " + ("@" + username if username else "нет")
     )
@@ -233,6 +245,7 @@ async def get_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Занятие: " + d.get("work", "") + "\n"
         "Чем могу быть полезна: " + d.get("value", "") + "\n"
         "Почему хочу в клуб: " + d.get("why", "") + "\n"
+        "Instagram: " + d.get("instagram", "") + "\n"
         "Username: " + ("@" + username if username else "нет")
     )
 
@@ -325,6 +338,7 @@ def main():
             WORK:  [MessageHandler(filters.TEXT & ~filters.COMMAND, get_work)],
             VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_value)],
             WHY:   [MessageHandler(filters.TEXT & ~filters.COMMAND, get_why)],
+            INSTAGRAM: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_instagram)],
             RULES: [CallbackQueryHandler(get_rules, pattern="^rules_")],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
