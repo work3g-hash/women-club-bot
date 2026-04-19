@@ -291,7 +291,7 @@ async def handle_admin_decision(update: Update, context: ContextTypes.DEFAULT_TY
             if saved:
                 card_text = format_card(saved["data"], saved["username"])
                 try:
-                    await context.bot.send_message(chat_id=GROUP_ID, text=card_text)
+                    await context.bot.send_message(chat_id=GROUP_ID, text=card_text, message_thread_id=16)
                 except Exception as e:
                     logger.error(f"Ошибка публикации в группу: {e}")
 
