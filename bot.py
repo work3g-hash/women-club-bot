@@ -1,4 +1,9 @@
 import logging
+import json
+import os
+from datetime import datetime
+import gspread
+from google.oauth2.service_account import Credentials
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -16,6 +21,7 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = "8762973970:AAHVP0OLco-jDU8a-q6WqfEb15WRMHxQYyw"
 ADMIN_ID = 691846456
 GROUP_LINK = "https://t.me/+tLpqhb4CvOYyMjk6"
+SHEET_ID = "1DfHKP3uXaEy4ZaKZRAeghPGlvLX7BWwnl6cVg7gyKPc"
 
 NAME, CITY, WORK, VALUE, WHY, RULES = range(6)
 
@@ -27,6 +33,49 @@ RULES_TEXT = """📋 Правила нашего клуба:
 4. Делимся только проверенными рекомендациями
 5. Всё, что обсуждается в клубе — остаётся внутри
 6. Наша цель — поддержка и польза друг другу"""
+
+
+def get_sheet():
+    creds_json = os.environ.get("GOOGLE_CREDS_JSON")
+    creds_dict = json.loads(creds_json)
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    client = gspread.authorize(creds)
+    sheet = client.open_by_key(SHEET_ID).sheet1
+    if not sheet.get_all_values():
+        sheet.insert_row(
+            ["Дата", "Имя", "Город", "Занятие", "Польза", "Почему", "Username", "Telegram ID", "Статус"],
+            index=1
+        )
+    return sheet
+
+
+def add_to_sheet(data: dict, username: str, user_id: int):
+    sheet = get_sheet()
+    row = [
+        datetime.now().strftime("%d.%m.%Y %H:%M"),
+        data.get("name", ""),
+        data.get("city", ""),
+        data.get("work", ""),
+        data.get("value", ""),
+        data.get("why", ""),
+        f"@{username}" if username else "нет",
+        str(user_id),
+        "На рассмотрении"
+    ]
+    sheet.append_row(row)
+
+
+def update_status(user_id: int, status: str):
+    try:
+        sheet = get_sheet()
+        rows = sheet.get_all_values()
+        for i, row in enumerate(rows):
+            if len(row) >= 8 and row[7] == str(user_id):
+                sheet.update_cell(i + 1, 9, status)
+                break
+    except Exception as e:
+        logger.error(f"Ошибка обновления статуса: {e}")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -94,16 +143,23 @@ async def get_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = query.from_user
     d = context.user_data
-    username = user.username if user.username else "нет"
+    username = user.username if user.username else ""
+
+    try:
+        add_to_sheet(d, username, user.id)
+        logger.info(f"Заявка записана в таблицу: {d.get('name')}")
+    except Exception as e:
+        logger.error(f"Ошибка записи в таблицу: {e}")
+
     card = (
         f"🔔 Новая заявка в клуб!\n\n"
-        f"👤 Имя: {d.get('name', '—')}\n"
-        f"📍 Город: {d.get('city', '—')}\n"
-        f"💼 Занятие: {d.get('work', '—')}\n"
-        f"🤝 Польза: {d.get('value', '—')}\n"
-        f"💛 Почему: {d.get('why', '—')}\n\n"
+        f"👤 Имя: {d.get('name', '')}\n"
+        f"📍 Город: {d.get('city', '')}\n"
+        f"💼 Занятие: {d.get('work', '')}\n"
+        f"🤝 Польза: {d.get('value', '')}\n"
+        f"💛 Почему: {d.get('why', '')}\n\n"
         f"ID: {user.id}\n"
-        f"Username: {username}"
+        f"Username: {'@' + username if username else 'нет'}"
     )
     keyboard = [[
         InlineKeyboardButton("✅ Одобрить", callback_data=f"approve_{user.id}"),
@@ -133,6 +189,7 @@ async def handle_admin_decision(update: Update, context: ContextTypes.DEFAULT_TY
     applicant_id = int(applicant_id)
 
     if action == "approve":
+        update_status(applicant_id, "✅ Одобрена")
         await context.bot.send_message(
             chat_id=applicant_id,
             text=(
@@ -143,6 +200,7 @@ async def handle_admin_decision(update: Update, context: ContextTypes.DEFAULT_TY
         )
         await query.edit_message_text(query.message.text + "\n\n✅ Одобрено — ссылка отправлена")
     else:
+        update_status(applicant_id, "❌ Отклонена")
         await context.bot.send_message(
             chat_id=applicant_id,
             text=(
@@ -162,7 +220,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
-
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
@@ -176,10 +233,8 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True,
     )
-
     app.add_handler(conv_handler)
     app.add_handler(CallbackQueryHandler(handle_admin_decision, pattern="^(approve|reject)_"))
-
     logger.info("Бот запущен!")
     app.run_polling(drop_pending_updates=True)
 
