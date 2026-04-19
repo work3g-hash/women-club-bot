@@ -10,7 +10,6 @@ from telegram.ext import (
     MessageHandler,
     CallbackQueryHandler,
     ConversationHandler,
-    ChatMemberHandler,
     filters,
     ContextTypes,
 )
@@ -22,9 +21,8 @@ BOT_TOKEN = "8762973970:AAHVP0OLco-jDU8a-q6WqfEb15WRMHxQYyw"
 ADMIN_ID = 691846456
 GROUP_LINK = "https://t.me/+tLpqhb4CvOYyMjk6"
 SHEET_ID = "1DfHKP3uXaEy4ZaKZRAeghPGlvLX7BWwnl6cVg7gyKPc"
-
-# ID группы — заполним после того как добавим бота в группу
-GROUP_ID = -1003998295077  # например: -1001234567890
+GROUP_ID = -1003998295077
+TOPIC_ID = 16  # Тема "Знакомства"
 
 GOOGLE_CREDS = {
     "type": "service_account",
@@ -71,16 +69,17 @@ GOOGLE_CREDS = {
 
 NAME, CITY, WORK, VALUE, WHY, RULES = range(6)
 
-RULES_TEXT = """Прежде чем продолжить, познакомься с правилами нашего клуба 🤍
-
-1. Уважительное общение — это основа всего
-2. Оскорбления и конфликты недопустимы
-3. Никакой агрессивной рекламы
-4. Делимся только проверенными рекомендациями
-5. Всё, что происходит в клубе — остаётся внутри
-6. Мы здесь для того, чтобы быть полезными друг другу
-
-Клуб создан для женщин, которые хотят давать и получать — поддержку, контакты, опыт и тёплое общение."""
+RULES_TEXT = (
+    "Прежде чем продолжить, познакомься с правилами нашего клуба\n\n"
+    "1. Уважительное общение — это основа всего\n"
+    "2. Оскорбления и конфликты недопустимы\n"
+    "3. Никакой агрессивной рекламы\n"
+    "4. Делимся только проверенными рекомендациями\n"
+    "5. Всё, что происходит в клубе — остаётся внутри\n"
+    "6. Мы здесь для того, чтобы быть полезными друг другу\n\n"
+    "Клуб создан для женщин, которые хотят давать и получать — "
+    "поддержку, контакты, опыт и тёплое общение."
+)
 
 
 def get_sheet():
@@ -96,23 +95,24 @@ def get_sheet():
     return sheet
 
 
-def add_to_sheet(data: dict, username: str, user_id: int):
+def add_to_sheet(data, username, user_id):
     sheet = get_sheet()
+    tz = pytz.timezone("Europe/Berlin")
     row = [
-        datetime.now(pytz.timezone("Europe/Berlin")).strftime("%d.%m.%Y %H:%M"),
+        datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
         data.get("name", ""),
         data.get("city", ""),
         data.get("work", ""),
         data.get("value", ""),
         data.get("why", ""),
-        f"@{username}" if username else "нет",
+        "@" + username if username else "нет",
         str(user_id),
         "На рассмотрении"
     ]
     sheet.append_row(row)
 
 
-def update_status(user_id: int, status: str):
+def update_status(user_id, status):
     try:
         sheet = get_sheet()
         rows = sheet.get_all_values()
@@ -121,32 +121,20 @@ def update_status(user_id: int, status: str):
                 sheet.update_cell(i + 1, 9, status)
                 break
     except Exception as e:
-        logger.error(f"Ошибка обновления статуса: {e}")
-
-
-def format_card(data: dict, username: str) -> str:
-    return (
-        f"👋 Новая участница!\n\n"
-        f"👤 Имя: {data.get('name', '')}\n"
-        f"📍 Город: {data.get('city', '')}\n"
-        f"💼 Занятие: {data.get('work', '')}\n"
-        f"🤝 Чем могу быть полезна: {data.get('value', '')}\n"
-        f"💛 Почему хочу в клуб: {data.get('why', '')}\n"
-        f"📱 Username: {'@' + username if username else 'нет'}"
-    )
+        logger.error("Ошибка обновления статуса: %s", e)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await update.message.reply_text(
-        "Привет! 🌸\n\n"
+        "Привет!\n\n"
         "Ты сделала первый шаг к вступлению в Девочки Рулят — "
         "закрытый клуб для украинок и русскоязычных женщин в Германии.\n\n"
         "Здесь собираются интересные, активные и открытые женщины, "
         "которые хотят находить своих людей, делиться опытом "
         "и быть полезными друг другу.\n\n"
         "Вход в клуб по анкете — это займёт около 2 минут.\n\n"
-        "Начнём? Как тебя зовут? 😊"
+        "Начнём? Как тебя зовут?"
     )
     return NAME
 
@@ -154,8 +142,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["name"] = update.message.text
     await update.message.reply_text(
-        f"Очень приятно, {update.message.text}! 🤍\n\n"
-        "В каком городе Германии ты живёшь или работаешь? 📍"
+        "Очень приятно, " + update.message.text + "!\n\n"
+        "В каком городе Германии ты живёшь или работаешь?"
     )
     return CITY
 
@@ -164,7 +152,7 @@ async def get_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["city"] = update.message.text
     await update.message.reply_text(
         "Чем ты занимаешься? Расскажи немного о себе — "
-        "работа, бизнес, профессия или, может быть, сейчас в поиске. 💼"
+        "работа, бизнес, профессия или, может быть, сейчас в поиске."
     )
     return WORK
 
@@ -172,7 +160,7 @@ async def get_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def get_work(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["work"] = update.message.text
     await update.message.reply_text(
-        "Это важный вопрос, который мы задаём всем 🤝\n\n"
+        "Это важный вопрос, который мы задаём всем.\n\n"
         "Чем ты можешь быть полезна участницам клуба?\n\n"
         "Может быть, у тебя есть опыт, знания, контакты или просто "
         "желание поддерживать других — всё это ценно."
@@ -183,7 +171,7 @@ async def get_work(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def get_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["value"] = update.message.text
     await update.message.reply_text(
-        "И последний вопрос перед правилами 💛\n\n"
+        "И последний вопрос перед правилами.\n\n"
         "Почему тебе интересно быть в этом клубе?\n\n"
         "Что ты хочешь найти здесь — для себя?"
     )
@@ -193,12 +181,12 @@ async def get_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def get_why(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["why"] = update.message.text
     keyboard = [[
-        InlineKeyboardButton("✅ Да, принимаю", callback_data="rules_yes"),
-        InlineKeyboardButton("❌ Нет", callback_data="rules_no"),
+        InlineKeyboardButton("Да, принимаю", callback_data="rules_yes"),
+        InlineKeyboardButton("Нет", callback_data="rules_no"),
     ]]
     await update.message.reply_text(RULES_TEXT)
     await update.message.reply_text(
-        "Ты согласна соблюдать эти правила и быть частью нашего клуба? 🤍",
+        "Ты согласна соблюдать эти правила и быть частью нашего клуба?",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
     return RULES
@@ -210,10 +198,10 @@ async def get_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "rules_no":
         await query.edit_message_text(
-            "Спасибо за честность 🙏\n\n"
+            "Спасибо за честность.\n\n"
             "Без согласия с правилами мы не сможем принять заявку — "
             "это важно для атмосферы клуба.\n\n"
-            "Если передумаешь — просто напиши /start, мы всегда рады 💛"
+            "Если передумаешь — просто напиши /start, мы всегда рады."
         )
         return ConversationHandler.END
 
@@ -223,23 +211,37 @@ async def get_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         add_to_sheet(d, username, user.id)
-        logger.info(f"Заявка записана в таблицу: {d.get('name')}")
+        logger.info("Заявка записана: %s", d.get("name"))
     except Exception as e:
-        logger.error(f"Ошибка записи в таблицу: {e}")
+        logger.error("Ошибка записи в таблицу: %s", e)
 
     admin_card = (
-        f"🔔 Новая заявка в Девочки Рулят!\n\n"
-        f"👤 Имя: {d.get('name', '')}\n"
-        f"📍 Город: {d.get('city', '')}\n"
-        f"💼 Занятие: {d.get('work', '')}\n"
-        f"🤝 Польза: {d.get('value', '')}\n"
-        f"💛 Почему: {d.get('why', '')}\n\n"
-        f"ID: {user.id}\n"
-        f"Username: {'@' + username if username else 'нет'}"
+        "Новая заявка в Девочки Рулят!\n\n"
+        "Имя: " + d.get("name", "") + "\n"
+        "Город: " + d.get("city", "") + "\n"
+        "Занятие: " + d.get("work", "") + "\n"
+        "Польза: " + d.get("value", "") + "\n"
+        "Почему: " + d.get("why", "") + "\n\n"
+        "ID: " + str(user.id) + "\n"
+        "Username: " + ("@" + username if username else "нет")
     )
+
+    group_card = (
+        "Новая участница!\n\n"
+        "Имя: " + d.get("name", "") + "\n"
+        "Город: " + d.get("city", "") + "\n"
+        "Занятие: " + d.get("work", "") + "\n"
+        "Чем могу быть полезна: " + d.get("value", "") + "\n"
+        "Почему хочу в клуб: " + d.get("why", "") + "\n"
+        "Username: " + ("@" + username if username else "нет")
+    )
+
+    # Сохраняем визитку для группы
+    context.bot_data["group_card_" + str(user.id)] = group_card
+
     keyboard = [[
-        InlineKeyboardButton("✅ Одобрить", callback_data=f"approve_{user.id}"),
-        InlineKeyboardButton("❌ Отклонить", callback_data=f"reject_{user.id}"),
+        InlineKeyboardButton("Одобрить", callback_data="approve_" + str(user.id)),
+        InlineKeyboardButton("Отклонить", callback_data="reject_" + str(user.id)),
     ]]
     await context.bot.send_message(
         chat_id=ADMIN_ID,
@@ -247,10 +249,10 @@ async def get_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
     await query.edit_message_text(
-        "Твоя заявка отправлена! 🌸\n\n"
+        "Твоя заявка отправлена!\n\n"
         "Мы внимательно её рассмотрим и ответим тебе здесь в течение 24-48 часов.\n\n"
         "Если тебя одобрят — твоя анкета будет опубликована в группе, "
-        "чтобы участницы могли познакомиться с тобой 💛"
+        "чтобы участницы могли познакомиться с тобой."
     )
     return ConversationHandler.END
 
@@ -266,54 +268,48 @@ async def handle_admin_decision(update: Update, context: ContextTypes.DEFAULT_TY
     applicant_id = int(applicant_id)
 
     if action == "approve":
-        update_status(applicant_id, "✅ Одобрена")
+        update_status(applicant_id, "Одобрена")
         await context.bot.send_message(
             chat_id=applicant_id,
             text=(
-                "Добро пожаловать в Девочки Рулят! 🎉🌸\n\n"
+                "Добро пожаловать в Девочки Рулят!\n\n"
                 "Твоя заявка одобрена — мы рады, что ты с нами!\n\n"
-                f"Вот ссылка для вступления в наш клуб:\n{GROUP_LINK}\n\n"
-                "Когда зайдёшь — твоя анкета будет опубликована в группе, "
+                "Вот ссылка для вступления в наш клуб:\n" + GROUP_LINK + "\n\n"
+                "Когда зайдёшь — твоя анкета будет опубликована в разделе Знакомства, "
                 "чтобы все смогли познакомиться с тобой.\n\n"
-                "Увидимся внутри! 💛"
+                "Увидимся внутри!"
             )
         )
-
-        # Публикуем визитку в группе
-        if GROUP_ID:
-            # Берём текст прямо из сообщения администратору
-            card_text = query.message.text
+        # Публикуем визитку в теме Знакомства
+        group_card = context.bot_data.get("group_card_" + str(applicant_id))
+        if group_card:
             try:
                 await context.bot.send_message(
                     chat_id=GROUP_ID,
-                    text="👋 Новая участница!
-
-" + "
-".join(card_text.split("
-")[2:9]),
-                    message_thread_id=16
+                    text=group_card,
+                    message_thread_id=TOPIC_ID
                 )
             except Exception as e:
-                logger.error(f"Ошибка публикации в группу: {e}")
+                logger.error("Ошибка публикации в группу: %s", e)
 
-        await query.edit_message_text(query.message.text + "\n\n✅ Одобрено — ссылка отправлена")
+        await query.edit_message_text(query.message.text + "\n\nОдобрено — ссылка отправлена")
     else:
-        update_status(applicant_id, "❌ Отклонена")
+        update_status(applicant_id, "Отклонена")
         await context.bot.send_message(
             chat_id=applicant_id,
             text=(
-                "Спасибо, что заинтересовалась нашим клубом 🙏\n\n"
+                "Спасибо, что заинтересовалась нашим клубом.\n\n"
                 "К сожалению, сейчас мы не можем принять твою заявку.\n\n"
-                "Следи за нашим Instagram — возможно, мы снова откроем приём 💛"
+                "Следи за нашим Instagram — возможно, мы снова откроем приём."
             )
         )
-        await query.edit_message_text(query.message.text + "\n\n❌ Отклонено")
+        await query.edit_message_text(query.message.text + "\n\nОтклонено")
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await update.message.reply_text(
-        "Анкета сброшена 🌸\n\n"
+        "Анкета сброшена.\n\n"
         "Если захочешь вступить — просто напиши /start, мы всегда рады!"
     )
     return ConversationHandler.END
