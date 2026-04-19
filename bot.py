@@ -227,12 +227,6 @@ async def get_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Ошибка записи в таблицу: {e}")
 
-    # Сохраняем данные для публикации визитки после вступления
-    context.bot_data[f"card_{user.id}"] = {
-        "data": d.copy(),
-        "username": username
-    }
-
     admin_card = (
         f"🔔 Новая заявка в Девочки Рулят!\n\n"
         f"👤 Имя: {d.get('name', '')}\n"
@@ -285,15 +279,22 @@ async def handle_admin_decision(update: Update, context: ContextTypes.DEFAULT_TY
             )
         )
 
-        # Публикуем визитку в группе если GROUP_ID задан
+        # Публикуем визитку в группе
         if GROUP_ID:
-            saved = context.bot_data.get(f"card_{applicant_id}")
-            if saved:
-                card_text = format_card(saved["data"], saved["username"])
-                try:
-                    await context.bot.send_message(chat_id=GROUP_ID, text=card_text, message_thread_id=16)
-                except Exception as e:
-                    logger.error(f"Ошибка публикации в группу: {e}")
+            # Берём текст прямо из сообщения администратору
+            card_text = query.message.text
+            try:
+                await context.bot.send_message(
+                    chat_id=GROUP_ID,
+                    text="👋 Новая участница!
+
+" + "
+".join(card_text.split("
+")[2:9]),
+                    message_thread_id=16
+                )
+            except Exception as e:
+                logger.error(f"Ошибка публикации в группу: {e}")
 
         await query.edit_message_text(query.message.text + "\n\n✅ Одобрено — ссылка отправлена")
     else:
