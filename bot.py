@@ -23,7 +23,7 @@ GROUP_LINK = "https://t.me/+tLpqhb4CvOYyMjk6"
 SHEET_ID = "1DfHKP3uXaEy4ZaKZRAeghPGlvLX7BWwnl6cVg7gyKPc"
 
 # ID группы — заполним после того как добавим бота в группу
-GROUP_ID = None  # например: -1001234567890
+GROUP_ID = -1001003998295077  # например: -1001234567890
 
 GOOGLE_CREDS = {
     "type": "service_account",
